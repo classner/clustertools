@@ -27,6 +27,8 @@ logging.basicConfig(
               help="The number of GPUs requested.")
 @click.option("--prio", type=click.INT, default=0,
               help="The priority to add to default.")
+@click.option("--shell", type=click.STRING, default=None,
+              help="The execution shell. If unspecified, use the plain HTCondor env.")
 # Job restrictions.
 @click.option("--allow_gpu_nodes_for_cpuonly", type=click.BOOL, default=False, is_flag=True,
               help=("By default, if only CPUs are requested, no GPU nodes are "
@@ -57,7 +59,7 @@ logging.basicConfig(
               help=("Specify a custom email address for notification. Defaults "
                     "to MPI email address."))
 def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-many-arguments
-        request_cpus=1, request_memory=4, request_gpus=0, prio=0,
+        request_cpus=1, request_memory=4, request_gpus=0, prio=0, shell=None,
         allow_gpu_nodes_for_cpuonly=False, avoid_nodes=None, force_node=None,
         gpu_memory_gt=None, gpu_memory_lt=None, run_encaged=False,
         stdout_fp=None, stderr_fp=None,
@@ -79,6 +81,11 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
     LOGGER.info("Executing `%s` with parameters: %s.",
                 full_command, str(command[1:]))
     LOGGER.info("Creating job specification...")
+    if shell is not None:
+        shell_command = subprocess.check_output(['which', shell]).strip()
+        full_inner_command = full_command
+        full_command = shell_command
+        command = ["-c", " ".join([full_inner_command] + command[1:])]
     condor_sub = []
     # Executable.
     # (see http://research.cs.wisc.edu/htcondor/manual/current/condor_submit.html)
@@ -119,8 +126,12 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
     condor_sub.append("requirements={}".format("&&".join(requirements)))
     # Logging options.
     if stdout_fp is None:
-        stdout_fp = path.abspath(path.basename(full_command) + '_' +
-                                 time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt')
+        if shell is not None:
+            stdout_fp = path.abspath(path.basename(full_inner_command) + '_' +
+                                     time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt')
+        else:
+            stdout_fp = path.abspath(path.basename(full_command) + '_' +
+                                     time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt')
     if stderr_fp is None:
         stderr_fp = stdout_fp
     condor_sub.append("output="+stdout_fp)
