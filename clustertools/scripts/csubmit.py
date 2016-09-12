@@ -3,13 +3,16 @@ from os import path
 import time
 import subprocess
 import logging
+import tempfile
 
 import click
 
 from clustertools.logging import LOGFORMAT
 
-
 LOGGER = logging.getLogger(__name__)
+logging.basicConfig(
+    format=LOGFORMAT,
+    level=logging.INFO)
 
 
 @click.command()
@@ -17,7 +20,7 @@ LOGGER = logging.getLogger(__name__)
 # Job specification.
 @click.option("--request_cpus", type=click.INT, default=1,
               help="The number of CPUs requested.")
-@click.option("--request_memory", type=click.INT,
+@click.option("--request_memory", type=click.INT, default=8,
               help="Requested memory in Gb.")
 @click.option("--request_gpus", type=click.INT, default=0,
               help="The number of GPUs requested.")
@@ -36,6 +39,9 @@ LOGGER = logging.getLogger(__name__)
               help="GPU memory must be greater than this threshold (Mb).")
 @click.option("--gpu_memory_lt", type=click.INT, default=None,
               help="GPU memory must be less than this threshold (Mb).")
+@click.option("--run_encaged", type=click.BOOL, default=False, is_flag=True,
+              help=("Run the command within memory limits and repeat it until "
+                    "it succeeds."))
 # Logging.
 @click.option("--stdout_fp", type=click.Path(dir_okay=False, writable=True), default=None,
               help="Filepath to redirect the stdout to. Defaults to `$exec_$date_out.txt`.")
@@ -52,55 +58,72 @@ LOGGER = logging.getLogger(__name__)
 def cli(command,
         request_cpus=1, request_memory=4, request_gpus=0, prio=0,
         allow_gpu_nodes_for_cpuonly=False, avoid_nodes=None, force_node=None,
-        gpu_memory_gt=None, gpu_memory_lt=None,
+        gpu_memory_gt=None, gpu_memory_lt=None, run_encaged=False,
         stdout_fp=None, stderr_fp=None,
         notify_success=False, notify_failure=False, notify_email=None):
+    """Submit a cluster job."""
     LOGGER.info("Preparing to submit cluster job...")
     # Checks.
-    assert request_cpus > 0 and request_memory > 0 and request_gpus > 0 and prio > 0
+    assert request_cpus > 0 and request_memory > 0 and request_gpus >= 0 and prio >= 0
     if avoid_nodes is not None and force_node is not None:
         LOGGER.warn("--avoid_nodes and --force_node set! This calls for trouble!")
     if gpu_memory_lt is not None and gpu_memory_gt is not None:
         LOGGER.warn("--gpu_memory_lt and --gpu_memory_gt both set!")
     if (gpu_memory_lt is not None or gpu_memory_gt is not None) and request_gpus == 0:
         raise Exception("Requested GPU restrictions without a GPU!")
+    # Unify unicode handling.
+    command = [str(cmd) for cmd in command]
     # Get executable command.
     full_command = subprocess.check_output(['which', command[0]]).strip()
     LOGGER.info("Executing `%s` with parameters: %s.",
                 full_command, str(command[1:]))
     LOGGER.info("Creating job specification...")
+    condor_sub = []
     # Executable.
-    condor_commandp.extend(["-append", "executable="+full_command])
-    condor_commandp.extend(["-append", "arguments=\"{}\"".format([prm.replace('"', '\\"')
-                            for prm in command[1:]].join(" "))])
-    condor_commandp = ['condor_submit']
-    requirements = []
-    condor_commandp.extend(["-append", "request_cpus={}".format(request_cpus)])
-    condor_commandp.extend(["-append", "request_memory={}".format(request_memory)])
-    if gpus > 0:
-        condor_commandp.extend(["-append", "request_gpus={}".format(request_gpus)])
-    condor_commandp.extend(["-append", "priority={}".format(prio)])
+    # (see http://research.cs.wisc.edu/htcondor/manual/current/condor_submit.html)
+    # Single ticks within the arguments must be escaped, and arguments with
+    # spaces must be put in single ticks.
+    command = [cmd.replace("'", "''") for cmd in command]
+    command = [cmd.replace('"', '""') for cmd in command]
+    command = [cmd.strip() if not " " in cmd.strip() else "'" + cmd + "'"
+               for cmd in command]
+    if run_encaged:
+        encage_command = subprocess.check_output(['which', 'encaged']).strip()
+        LOGGER.debug("Using encage command `%s`.", encage_command)
+        condor_sub.append("executable="+encage_command)
+        condor_sub.append("arguments=\"{}\"".format(" ".join(
+            [str(request_memory), '--'] + command)))
+    else:
+        condor_sub.append("executable="+full_command)
+        condor_sub.append("arguments=\"{}\"".format(" ".join(command[1:])))
+    condor_sub.append("request_cpus={}".format(request_cpus))
+    condor_sub.append("request_memory={}".format(request_memory * 1024))
+    if request_gpus > 0:
+        condor_sub.append("request_gpus={}".format(request_gpus))
+    condor_sub.append("priority={}".format(prio))
     # Build the requirements.
-    if not allow_gpu_nodes_for_cpuonly and gpus == 0:
+    requirements = []
+    if not allow_gpu_nodes_for_cpuonly and request_gpus == 0:
         requirements.append("TARGET.TotalGPUs=?=0")
     if avoid_nodes is not None:
-        requirements.append(["Machine!=\"{}.internal.cluster.is.localnet\"".format(mname)
-                             for mname in avoid_nodes.split(",")].join("&&"))
+        requirements.append("&&".join(
+            ["Machine!=\"{}.internal.cluster.is.localnet\"".format(mname)
+             for mname in avoid_nodes.split(",")]))
     if force_node is not None:
         requirements.append("Machine==\"{}.internal.cluster.is.localnet\"".format(force_node))
     if gpu_memory_gt is not None:
         requirements.append("TARGET.CUDAGlobalMemoryMb>{}".format(gpu_memory_gt))
     if gpu_memory_lt is not None:
         requirements.append("TARGET.CUDAGlobalMemoryMb<{}".format(gpu_memory_lt))
-    condor_commandp.extend(["-append", "requirements={}".format(requirements.join("&&"))])
+    condor_sub.append("requirements={}".format("&&".join(requirements)))
     # Logging options.
     if stdout_fp is None:
         stdout_fp = path.abspath(path.basename(full_command) + '_' +
                                  time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt')
     if stderr_fp is None:
         stderr_fp = stdout_fp
-    condor_commandp.extend(["-append", "output="+stdout_fp])
-    condor_commandp.extend(["-append", "error="+stderr_fp])
+    condor_sub.append("output="+stdout_fp)
+    condor_sub.append("error="+stderr_fp)
     # Notification options.
     if notify_failure:
         if notify_success:
@@ -111,16 +134,24 @@ def cli(command,
         notify_string = "Complete"
     else:
         notify_string = "Never"
-    condor_commandp.extend(["-append", "notification="+notify_string])
-    condor_commandp.extend(["-append", "notify_user="+notify_email])
-    LOGGER.debug("Created submission command: `%s`.", str(condor_commandp))
-    LOGGER.info("Submitting...")
-    subprocess.check_call(condor_commandp)
+    condor_sub.append("notification="+notify_string)
+    if notify_email is not None:
+        condor_sub.append("notify_user="+notify_email)
+    condor_sub.append("queue")
+    with tempfile.NamedTemporaryFile(mode='w') as subfile:
+        LOGGER.info("Using temporary submission file `%s`.", subfile.name)
+        for line in condor_sub:
+            subfile.file.write(line + "\n")
+        subfile.file.flush()
+        LOGGER.debug("Created submission file as: `%s`.", str("\n".join(condor_sub)))
+        LOGGER.info("Submitting...")
+        try:
+            subprocess.check_call(['condor_submit', subfile.name])
+            LOGGER.info("Submission complete.")
+        except:
+            LOGGER.critical("Submission failed!")
     LOGGER.info("Done.")
 
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        format=LOGFORMAT,
-        level=logging.DEBUG)
     cli()

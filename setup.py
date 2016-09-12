@@ -12,12 +12,14 @@ setup(
     author='Christoph Lassner',
     author_email='mail@christophlassner.de',
     packages=find_packages(),
+    include_package_data=True,
     install_requires=[
         'click',
     ],
     entry_points='''
     [console_scripts]
-
+    csubmit=clustertools.scripts.csubmit:cli
+    encaged=clustertools.scripts.encaged:cli
     ''',
     version=VERSION,
     license='MIT License',
