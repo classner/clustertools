@@ -5,7 +5,7 @@ import logging
 
 import click
 
-from clustertools.logging import LOGFORMAT
+from clustertools.log import LOGFORMAT
 
 logging.basicConfig(level=logging.DEBUG,
                     format=LOGFORMAT)
@@ -33,9 +33,9 @@ def cli(memory, command):
             subprocess.check_call([CAGE_FP] + cage_options + command)
             succeeded = True
             LOGGER.info("Attempt complete.")
-        except Exception as ex:
+        except Exception as ex:  # pylint: disable=broad-except
             LOGGER.info("Attempt failed: %s.", str(ex))
     LOGGER.info("Cage released.")
 
 if __name__ == '__main__':
-    cli()
+    cli()  # pylint: disable=no-value-for-parameter

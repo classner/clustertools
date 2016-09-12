@@ -8,7 +8,7 @@ LOGGER = logging.getLogger(__name__)
 def available_cpu_count():
     """Number of available CPUs for this session."""
     try:
-        m = re.search(r'(?m)^Cpus_allowed:\s*(.*)$',
+        m = re.search(r'(?m)^Cpus_allowed:\s*(.*)$',  # pylint: disable=invalid-name
                       open('/proc/self/status').read())
         if m:
             res = bin(int(m.group(1).replace(',', ''), 16)).count('1')

@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 """Convenient condor submit wrapper."""
 from os import path
 import time
@@ -7,7 +8,7 @@ import tempfile
 
 import click
 
-from clustertools.logging import LOGFORMAT
+from clustertools.log import LOGFORMAT
 
 LOGGER = logging.getLogger(__name__)
 logging.basicConfig(
@@ -55,7 +56,7 @@ logging.basicConfig(
 @click.option("--notify_email", type=click.STRING, default=None,
               help=("Specify a custom email address for notification. Defaults "
                     "to MPI email address."))
-def cli(command,
+def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-many-arguments
         request_cpus=1, request_memory=4, request_gpus=0, prio=0,
         allow_gpu_nodes_for_cpuonly=False, avoid_nodes=None, force_node=None,
         gpu_memory_gt=None, gpu_memory_lt=None, run_encaged=False,
@@ -148,10 +149,10 @@ def cli(command,
         try:
             subprocess.check_call(['condor_submit', subfile.name])
             LOGGER.info("Submission complete.")
-        except:
-            LOGGER.critical("Submission failed!")
+        except Exception as ex:  # pylint: disable=broad-except
+            LOGGER.critical("Submission failed: %s!", str(ex))
     LOGGER.info("Done.")
 
 
 if __name__ == '__main__':
-    cli()
+    cli()  # pylint: disable=no-value-for-parameter
