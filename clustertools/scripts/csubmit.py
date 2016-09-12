@@ -85,7 +85,11 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
         shell_command = subprocess.check_output(['which', shell]).strip()
         full_inner_command = full_command
         full_command = shell_command
-        command = ["-c", " ".join([full_inner_command] + command[1:])]
+        command = [shell_command, "-c",
+                   " ".join([full_inner_command] +
+                            [cmd.strip() if not " " in cmd.strip() else
+                             '"' + cmd.replace('"', '\\"') + '"'
+                             for cmd in command[1:]])]
     condor_sub = []
     # Executable.
     # (see http://research.cs.wisc.edu/htcondor/manual/current/condor_submit.html)
