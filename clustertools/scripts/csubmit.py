@@ -160,6 +160,13 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
             subfile.file.write(line + "\n")
         subfile.file.flush()
         LOGGER.debug("Created submission file as: `%s`.", str("\n".join(condor_sub)))
+        subfile.file.close()
+        LOGGER.debug("File contents:")
+        LOGGER.debug("--------------------------------------------------------")
+        with open(subfile.name, 'r') as debugfile:
+            for line in debugfile:
+                LOGGER.debug(line.strip())
+        LOGGER.debug("--------------------------------------------------------")
         LOGGER.info("Submitting...")
         try:
             subprocess.check_call(['condor_submit', subfile.name])
