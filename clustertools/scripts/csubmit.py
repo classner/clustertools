@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 """Convenient condor submit wrapper."""
 from os import path
+import re
 import time
 import subprocess
 import logging
@@ -104,7 +105,7 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
         LOGGER.debug("Using encage command `%s`.", encage_command)
         condor_sub.append("executable="+encage_command)
         condor_sub.append("arguments=\"{}\"".format(" ".join(
-            [str(request_memory), '--'] + command)))
+            [str(request_memory - 1), '--'] + command)))
     else:
         condor_sub.append("executable="+full_command)
         condor_sub.append("arguments=\"{}\"".format(" ".join(command[1:])))
@@ -112,7 +113,7 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
     condor_sub.append("request_memory={}".format(request_memory * 1024))
     if request_gpus > 0:
         condor_sub.append("request_gpus={}".format(request_gpus))
-    condor_sub.append("priority={}".format(prio))
+    condor_sub.append("priority={}".format(-999+prio))
     # Build the requirements.
     requirements = []
     if not allow_gpu_nodes_for_cpuonly and request_gpus == 0:
@@ -169,8 +170,16 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
         LOGGER.debug("--------------------------------------------------------")
         LOGGER.info("Submitting...")
         try:
-            subprocess.check_call(['condor_submit', subfile.name])
-            LOGGER.info("Submission complete.")
+            output = subprocess.check_output(['condor_submit', subfile.name])
+            regexm = re.search("submitted to cluster (\d*)", output)
+            job_id = int(regexm.group(1))
+            LOGGER.info("Job submitted with id %d.", job_id)
+            if prio != 0:
+                LOGGER.info("Setting priority...")
+                subprocess.check_call(['condor_prio',
+                                       '+%d' % (prio),
+                                       str(job_id)])
+                LOGGER.info("Priority set.")
         except Exception as ex:  # pylint: disable=broad-except
             LOGGER.critical("Submission failed: %s!", str(ex))
     LOGGER.info("Done.")
