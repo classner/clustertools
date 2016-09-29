@@ -47,15 +47,19 @@ logging.basicConfig(
               help=("Run the command within memory limits and repeat it until "
                     "it succeeds."))
 # Logging.
-@click.option("--stdout_fp", type=click.Path(dir_okay=False, writable=True), default=None,
-              help="Filepath to redirect the stdout to. Defaults to `$exec_$date_out.txt`.")
+@click.option("--stdout_fp", type=click.Path(writable=True), default=None,
+              help=("Filepath to redirect the stdout to. Defaults to "
+                    "`$exec_$date_out.txt`. If it is a directory, create the "
+                    "default out file in the given directory."))
 @click.option("--stderr_fp", type=click.Path(dir_okay=False, writable=True), default=None,
-              help="Filepath to redirect the stderr to. Default to `stdout_fp`.")
+              help="Filepath to redirect the stderr to. Defaults to `stdout_fp`.")
 # Notification.
 @click.option("--notify_success", type=click.BOOL, default=False, is_flag=True,
               help="Send an email to user on success.")
 @click.option("--notify_failure", type=click.BOOL, default=False, is_flag=True,
               help="Send an email to user on failure.")
+@click.option("--notify_always", type=click.BOOL, default=False, is_flag=True,
+              help="Shorthand for `--notify_success --notify_failure`.")
 @click.option("--notify_email", type=click.STRING, default=None,
               help=("Specify a custom email address for notification. Defaults "
                     "to MPI email address."))
@@ -64,7 +68,7 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
         allow_gpu_nodes_for_cpuonly=False, avoid_nodes=None, force_node=None,
         gpu_memory_gt=None, gpu_memory_lt=None, run_encaged=False,
         stdout_fp=None, stderr_fp=None,
-        notify_success=False, notify_failure=False, notify_email=None):
+        notify_success=False, notify_failure=False, notify_always=False, notify_email=None):
     """Submit a cluster job."""
     LOGGER.info("Preparing to submit cluster job...")
     # Checks.
@@ -130,20 +134,30 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
         requirements.append("TARGET.CUDAGlobalMemoryMb<{}".format(gpu_memory_lt))
     condor_sub.append("requirements={}".format("&&".join(requirements)))
     # Logging options.
-    if stdout_fp is None:
-        if shell is not None:
-            stdout_fp = path.abspath(path.basename(full_inner_command) + '_' +
-                                     time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt')
+    if stdout_fp is None or path.isdir(stdout_fp):
+        if path.isdir(stdout_fp):
+            logdir = stdout_fp[:]
         else:
-            stdout_fp = path.abspath(path.basename(full_command) + '_' +
-                                     time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt')
+            logdir = os.getcwd()
+        if shell is not None:
+            stdout_fp = path.abspath(
+                path.join(
+                    logdir,
+                    path.basename(full_inner_command) + '_' +
+                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt'))
+        else:
+            stdout_fp = path.abspath(
+                path.join(
+                    logdir,
+                    path.basename(full_command) + '_' +
+                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt'))
     if stderr_fp is None:
         stderr_fp = stdout_fp
     condor_sub.append("output="+stdout_fp)
     condor_sub.append("error="+stderr_fp)
     # Notification options.
-    if notify_failure:
-        if notify_success:
+    if notify_failure or notify_always:
+        if notify_success or notify_always:
             notify_string = "Always"
         else:
             notify_string = "Error"
