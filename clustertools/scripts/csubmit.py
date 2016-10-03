@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 """Convenient condor submit wrapper."""
+import os
 from os import path
 import re
 import time
@@ -135,7 +136,7 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
     condor_sub.append("requirements={}".format("&&".join(requirements)))
     # Logging options.
     if stdout_fp is None or path.isdir(stdout_fp):
-        if path.isdir(stdout_fp):
+        if stdout_fp is not None and path.isdir(stdout_fp):
             logdir = stdout_fp[:]
         else:
             logdir = os.getcwd()
