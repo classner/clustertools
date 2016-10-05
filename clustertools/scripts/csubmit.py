@@ -50,7 +50,7 @@ logging.basicConfig(
 # Logging.
 @click.option("--stdout_fp", type=click.Path(writable=True), default=None,
               help=("Filepath to redirect the stdout to. Defaults to "
-                    "`$exec_$date_out.txt`. If it is a directory, create the "
+                    "`$exec_$date_out.log`. If it is a directory, create the "
                     "default out file in the given directory."))
 @click.option("--stderr_fp", type=click.Path(dir_okay=False, writable=True), default=None,
               help="Filepath to redirect the stderr to. Defaults to `stdout_fp`.")
@@ -145,13 +145,13 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
                 path.join(
                     logdir,
                     path.basename(full_inner_command) + '_' +
-                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt'))
+                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.log'))
         else:
             stdout_fp = path.abspath(
                 path.join(
                     logdir,
                     path.basename(full_command) + '_' +
-                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.txt'))
+                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.log'))
     if stderr_fp is None:
         stderr_fp = stdout_fp
     condor_sub.append("output="+stdout_fp)
