@@ -7,6 +7,7 @@ import time
 import subprocess
 import logging
 import tempfile
+import getpass
 
 import click
 
@@ -47,6 +48,11 @@ logging.basicConfig(
 @click.option("--run_encaged", type=click.BOOL, default=False, is_flag=True,
               help=("Run the command within memory limits and repeat it until "
                     "it succeeds."))
+@click.option("--parallel_rest_name", type=click.STRING, default=None,
+              help="Specify a name for the parallel restriction. Default: username.")
+@click.option("--max_parallel", type=click.INT, default=None,
+              help=("Run at maximum the given number of jobs within the given "
+                    "parallel restriction."))
 # Logging.
 @click.option("--stdout_fp", type=click.Path(writable=True), default=None,
               help=("Filepath to redirect the stdout to. Defaults to "
@@ -68,6 +74,7 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
         request_cpus=1, request_memory=4, request_gpus=0, prio=0, shell=None,
         allow_gpu_nodes_for_cpuonly=False, avoid_nodes=None, force_node=None,
         gpu_memory_gt=None, gpu_memory_lt=None, run_encaged=False,
+        parallel_rest_name=None, max_parallel=None,
         stdout_fp=None, stderr_fp=None,
         notify_success=False, notify_failure=False, notify_always=False, notify_email=None):
     """Submit a cluster job."""
@@ -80,6 +87,8 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
         LOGGER.warn("--gpu_memory_lt and --gpu_memory_gt both set!")
     if (gpu_memory_lt is not None or gpu_memory_gt is not None) and request_gpus == 0:
         raise Exception("Requested GPU restrictions without a GPU!")
+    if parallel_rest_name is None:
+        parallel_rest_name = getpass.getuser()
     # Unify unicode handling.
     command = [str(cmd) for cmd in command]
     # Get executable command.
@@ -119,6 +128,12 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
     if request_gpus > 0:
         condor_sub.append("request_gpus={}".format(request_gpus))
     condor_sub.append("priority={}".format(-999+prio))
+    if max_parallel is not None:
+        parallel_tokens_per_job = 10000 // max_parallel
+        LOGGER.info("Using parallel restriction `user.%s:%d`.",
+                    parallel_rest_name, parallel_tokens_per_job)
+        condor_sub.append("concurrency_limits=user.%s:%d" % (
+            parallel_rest_name, parallel_tokens_per_job))
     # Build the requirements.
     requirements = []
     if not allow_gpu_nodes_for_cpuonly and request_gpus == 0:
