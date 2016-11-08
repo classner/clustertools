@@ -32,6 +32,8 @@ logging.basicConfig(
               help="The priority to add to default.")
 @click.option("--shell", type=click.STRING, default=None,
               help="The execution shell. If unspecified, use the plain HTCondor env.")
+@click.option("--n_copies", type=click.INT, default=1,
+              help="The number of job copies to start.")
 # Job restrictions.
 @click.option("--allow_gpu_nodes_for_cpuonly", type=click.BOOL, default=False, is_flag=True,
               help=("By default, if only CPUs are requested, no GPU nodes are "
@@ -71,7 +73,7 @@ logging.basicConfig(
               help=("Specify a custom email address for notification. Defaults "
                     "to MPI email address."))
 def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-many-arguments
-        request_cpus=1, request_memory=4, request_gpus=0, prio=0, shell=None,
+        request_cpus=1, request_memory=4, request_gpus=0, prio=0, shell=None, n_copies=1,
         allow_gpu_nodes_for_cpuonly=False, avoid_nodes=None, force_node=None,
         gpu_memory_gt=None, gpu_memory_lt=None, run_encaged=False,
         parallel_rest_name=None, max_parallel=None,
@@ -160,13 +162,13 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
                 path.join(
                     logdir,
                     path.basename(full_inner_command) + '_' +
-                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.log'))
+                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_$(Process)_out.log'))
         else:
             stdout_fp = path.abspath(
                 path.join(
                     logdir,
                     path.basename(full_command) + '_' +
-                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_out.log'))
+                    time.strftime("%Y-%m-%d_%H-%M-%S") + '_$(Process)_out.log'))
     if stderr_fp is None:
         stderr_fp = stdout_fp
     condor_sub.append("output="+stdout_fp)
@@ -184,7 +186,7 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
     condor_sub.append("notification="+notify_string)
     if notify_email is not None:
         condor_sub.append("notify_user="+notify_email)
-    condor_sub.append("queue")
+    condor_sub.append("queue %d", n_copies)
     with tempfile.NamedTemporaryFile(mode='w') as subfile:
         LOGGER.info("Using temporary submission file `%s`.", subfile.name)
         for line in condor_sub:
