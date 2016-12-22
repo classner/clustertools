@@ -1,2 +1,3 @@
 *.pyc
 clustertools.egg-info
+.#*
