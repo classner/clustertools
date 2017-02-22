@@ -186,7 +186,7 @@ def cli(command,  # pylint: disable=too-many-statements, too-many-branches, too-
     condor_sub.append("notification="+notify_string)
     if notify_email is not None:
         condor_sub.append("notify_user="+notify_email)
-    condor_sub.append("queue %d", n_copies)
+    condor_sub.append("queue %d" % (n_copies))
     with tempfile.NamedTemporaryFile(mode='w') as subfile:
         LOGGER.info("Using temporary submission file `%s`.", subfile.name)
         for line in condor_sub:
