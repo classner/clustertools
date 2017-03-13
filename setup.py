@@ -14,6 +14,8 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
+        'numpy',
+        'matplotlib',
         'click',
     ],
     entry_points='''
