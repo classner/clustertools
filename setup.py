@@ -5,7 +5,7 @@ The setup script for the entire project.
 """
 from setuptools import setup, find_packages
 
-VERSION = '0.1'
+VERSION = '0.2'
 
 setup(
     name='clustertools',
@@ -16,12 +16,16 @@ setup(
     install_requires=[
         'numpy',
         'matplotlib',
+        'seaborn',
+        'aenum',  # python 3: enum34
         'click',
     ],
     entry_points='''
     [console_scripts]
     csubmit=clustertools.scripts.csubmit:cli
     encaged=clustertools.scripts.encaged:cli
+    tfrcat=clustertools.scripts.tfrcat:cli
+    tfrpack=clustertools.scripts.tfrpack:cli
     ''',
     version=VERSION,
     license='MIT License',
