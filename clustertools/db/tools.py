@@ -29,7 +29,7 @@ def tf_decode_webp(inp_tensor):
                                    [inp_tensor],
                                    [tf.uint8, tf.int64, tf.int64],
                                    stateful=False)
-    return tf.reshape(im, tf.pack([height, width, 3]))
+    return tf.reshape(im, tf.cast(tf.pack([height, width, 3]), tf.int32))
 
 
 def _bytes_feature(value):
@@ -52,13 +52,31 @@ def encode_tf(tspec_entry):
             result[spec[0] + ':plain'] = _bytes_feature(colval.tostring())
             result[spec[0] + '.height'] = _int64_feature(colval.shape[0])
             result[spec[0] + '.width'] = _int64_feature(colval.shape[1])
-        elif spec[1] in [SPECTYPES.imlossless, SPECTYPES.imlossy]:
+        elif spec[1] == SPECTYPES.imlossless:
+            assert colval.ndim == 3 and colval.shape[2] == 3, (
+                "Only 3-channel images are supported.")
+            output = _strio.StringIO()
+            pilim = _PIL.Image.fromarray(colval)
+            pilim.save(output, format='PNG')
+            stringrep = output.getvalue()
+            output.close()
+            result[spec[0] + ':png'] = _bytes_feature(stringrep)
+        elif spec[1] == SPECTYPES.imlossy:
+            assert colval.ndim == 3 and colval.shape[2] == 3, (
+                "Only 3-channel images are supported.")
+            output = _strio.StringIO()
+            pilim = _PIL.Image.fromarray(colval)
+            pilim.save(output, format='JPEG')
+            stringrep = output.getvalue()
+            output.close()
+            result[spec[0] + ':jpg'] = _bytes_feature(stringrep)
+        elif spec[1] in [SPECTYPES.imlossless, SPECTYPES.imlossy] and False:
             assert colval.ndim == 3 and colval.shape[2] == 3, (
                 "Only 3-channel images are supported.")
             output = _strio.StringIO()
             pilim = _PIL.Image.fromarray(colval)
             pilim.save(output, format='WEBP',
-                       lossless=(spec[1]==SPECTYPES.imlossless))
+                       lossless=(spec[1] == SPECTYPES.imlossless))
             stringrep = output.getvalue()
             output.close()
             result[spec[0] + ':webp'] = _bytes_feature(stringrep)
@@ -198,7 +216,7 @@ def decode_tf(entry, column_names, coltypes, as_list=False):
             img_string = (entry.features.feature['image_raw']
                           .bytes_list
                           .value[0])
-            img_1d = np.fromstring(img_string, dtype=np.uint8)
+            img_1d = _np.fromstring(img_string, dtype=_np.uint8)
             image = img_1d.reshape((height, width, -1))
             result.append(image)
         elif coltypes[col_idx] in ['png', 'jpg', 'jpeg', 'webp']:
@@ -214,7 +232,10 @@ def decode_tf(entry, column_names, coltypes, as_list=False):
     else:
         resdict = dict()
         for cn, rs in zip(column_names, result):
-            resdict[cn] = rs
+            if ':' in cn:
+                resdict[cn[:cn.find(":")]] = rs
+            else:
+                resdict[cn] = rs
         return resdict
 
 
@@ -236,7 +257,6 @@ def decode_tf_tensors(entry, column_names, coltypes, as_list=False):
         if "." in coln:
             continue
         if coltypes[col_idx] == 'text':
-            continue
             result.append(features[coln])
         elif coltypes[col_idx] == 'plain':
             height = tf.cast(features[coln[:coln.find(":")] + ".height"],
@@ -247,9 +267,9 @@ def decode_tf_tensors(entry, column_names, coltypes, as_list=False):
             image_shape = tf.pack([height, width, 3])
             result.append(tf.reshape(image, image_shape))
         elif coltypes[col_idx] == 'png':
-            result.append(tf.decode_png(features[coln]))
+            result.append(tf.image.decode_png(features[coln]))
         elif coltypes[col_idx] in ['jpg', 'jpeg']:
-            result.append(tf.decode_jpeg(features[coln]))
+            result.append(tf.image.decode_jpeg(features[coln]))
         elif coltypes[col_idx] == 'webp':
             result.append(tf_decode_webp(features[coln]))
         else:
@@ -261,7 +281,10 @@ def decode_tf_tensors(entry, column_names, coltypes, as_list=False):
     else:
         resdict = dict()
         for cn, rs in zip(proc_names, result):
-            resdict[cn] = rs
+            if ':' in cn:
+                resdict[cn[:cn.find(":")]] = rs
+            else:
+                resdict[cn] = rs
         return resdict
 
 
@@ -294,29 +317,20 @@ class TFConverter(object):
         assert num_threads > 0
         assert self.tff_in is not None and self.tff_out is not None
         records = natsorted(glob(self.tff_in + '_p*.tfrecords'))
-        LOGGER.info("Converting the following records: %s.", str(records))
+        nsamples, colnames, coltypes = scan_tfdb(records)
+        LOGGER.info("Converting %d records from: %s.", nsamples, str(records))
         pool = Pool(processes=num_threads)
-        initialized = False
         p_idx = 0
+        if progress:
+            pbar = tqdm.tqdm(total=nsamples)
         for recfile in records:
-            LOGGER.info("Processing `%s`...", recfile)
             record_iterator = tf.python_io.tf_record_iterator(path=recfile)
             tff = tf.python_io.TFRecordWriter(self.tff_out +
                                               '_p%d.tfrecords' % (p_idx))
             p_idx += 1
             file_complete = False
-            if progress:
-                pbar = tqdm.tqdm()
             while not file_complete:
                 inputs = []
-                if not initialized:
-                    string_record = record_iterator.next()
-                    example = tf.train.Example()
-                    example.ParseFromString(string_record)
-                    # Parse fields.
-                    colnames, coltypes = parse_tfdset(example)
-                    initialized = True
-                    inputs.append(example)
                 while len(inputs) < num_threads:
                     try:
                         string_record = record_iterator.next()
@@ -345,8 +359,8 @@ class TFConverter(object):
                     tff.write(example.SerializeToString())
                 if progress:
                     pbar.update(num_threads)
-            if progress:
-                pbar.close()
+        if progress:
+            pbar.close()
 
     def __del__(self):
         self.tff_in = None
