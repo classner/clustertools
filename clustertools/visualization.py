@@ -3,8 +3,8 @@ import sys
 import numpy as np
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn  # For dynamic colormap generation.
+import matplotlib.pyplot as plt  # noqa: E402
+import seaborn  # noqa: E402
 
 
 def apply_colormap(image, vmin=None, vmax=None, cmap='viridis', cmap_seed=1):
@@ -41,8 +41,7 @@ def apply_colormap(image, vmin=None, vmax=None, cmap='viridis', cmap_seed=1):
         np.random.seed(cmap_seed)
         palette = np.random.permutation(seaborn.husl_palette(n_colors=cmap,
                                                              s=0.9,
-                                                             l=0.7
-        ))
+                                                             l=0.7))
         np.random.set_state(rng_state)
         # Fix the darkest color for background (can look nasty otherwise).
         darkidx = np.argsort(np.sum(np.square(palette), axis=1))[0]
