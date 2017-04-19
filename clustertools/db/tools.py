@@ -7,7 +7,7 @@ import logging
 import PIL as _PIL
 import PIL.Image as _Image
 import numpy as _np
-from enum import Enum as _Enum
+from aenum import Enum as _Enum
 from multiprocessing import Pool
 import tqdm
 import tensorflow as tf
