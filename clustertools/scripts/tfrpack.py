@@ -22,6 +22,13 @@ LOGGER = logging.getLogger(__name__)
 @click.option("--num_threads", type=click.INT, default=4,
               help="Number of threads to use for loading and encoding.")
 def cli(in_fp, out_fp=None, num_threads=4):
+    """Pack a directory with an unpacked database to several tfrecord files.
+
+    The directory must contain files with filenames according to pattern
+    00000_{colname}[:{encoding}].{png,jpg,npy,txt}. The number of leading 0s
+    must lead to a fixed length for all images, but doesn't have to be 5 as in
+    this example. The encoding can be added for image types.
+    """
     global load_fp, colendings,  colfullnames, fillwidth
     load_fp = in_fp
     if out_fp is None:
