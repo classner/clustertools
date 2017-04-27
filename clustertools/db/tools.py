@@ -48,10 +48,17 @@ def encode_tf(tspec_entry):
         if spec[1] == SPECTYPES.manual or spec[1] == SPECTYPES.text:
             result[spec[0]] = _bytes_feature(colval)
         elif spec[1] == SPECTYPES.implain:
-            assert colval.dtype == _np.uint8
-            result[spec[0] + ':plain'] = _bytes_feature(colval.tostring())
-            result[spec[0] + '.height'] = _int64_feature(colval.shape[0])
-            result[spec[0] + '.width'] = _int64_feature(colval.shape[1])
+            #assert colval.dtype == _np.uint8
+            result[spec[0] + ':plain:' + colval.dtype.name] = \
+                _bytes_feature(colval.tostring())
+            if colval.ndim < 1:
+                result[spec[0] + '.height'] = _int64_feature(1)
+            else:
+                result[spec[0] + '.height'] = _int64_feature(colval.shape[0])
+            if colval.ndim < 2:
+                result[spec[0] + '.width'] = _int64_feature(1)
+            else:
+                result[spec[0] + '.width'] = _int64_feature(colval.shape[1])
         elif spec[1] == SPECTYPES.imlossless:
             assert colval.ndim == 3 and colval.shape[2] == 3, (
                 "Only 3-channel images are supported.")
@@ -161,7 +168,7 @@ def parse_tfdset(entry):
         if '.' in col_name:
             continue
         if ":" in col_name:  # col_name:
-            enc_type = col_name[col_name.find(":")+1:]
+            enc_type = col_name.split(":")[1]
             coltypes.append(enc_type)
         else:
             coltypes.append('text')
@@ -205,18 +212,18 @@ def decode_tf(entry, column_names, coltypes, as_list=False):
                               .bytes_list
                               .value[0]))
         elif coltypes[col_idx] == 'plain':
-            height = int(entry.features.feature[column_names[col_idx] +
-                                                '.height']
+            coln_plain = column_names[col_idx].split(":")[0]
+            dtype_string = column_names[col_idx].split(":")[2]
+            height = int(entry.features.feature[coln_plain + '.height']
                          .int64_list
                          .value[0])
-            width = int(entry.features.feature[column_names[col_idx] +
-                                               '.width']
+            width = int(entry.features.feature[coln_plain + '.width']
                         .int64_list
                         .value[0])
-            img_string = (entry.features.feature['image_raw']
+            img_string = (entry.features.feature[column_names[col_idx]]
                           .bytes_list
                           .value[0])
-            img_1d = _np.fromstring(img_string, dtype=_np.uint8)
+            img_1d = _np.fromstring(img_string, _np.dtype(dtype_string))
             image = img_1d.reshape((height, width, -1))
             result.append(image)
         elif coltypes[col_idx] in ['png', 'jpg', 'jpeg', 'webp']:
@@ -246,6 +253,12 @@ def decode_tf_tensors(entry, column_names, coltypes, as_list=False):
     for coln, colt in zip(column_names, coltypes):
         if '.' not in coln:
             feat_dict[coln] = tf.FixedLenFeature([], tf.string)
+            if ':plain' in coln:
+                coln_raw = coln.split(":")[0]
+                feat_dict[coln_raw + '.width'] = tf.FixedLenFeature([],
+                                                                    tf.int64)
+                feat_dict[coln_raw + '.height'] = tf.FixedLenFeature([],
+                                                                     tf.int64)
         else:
             feat_dict[coln] = tf.FixedLenFeature([], tf.int64)
     features = tf.parse_single_example(
@@ -260,11 +273,12 @@ def decode_tf_tensors(entry, column_names, coltypes, as_list=False):
             result.append(features[coln])
         elif coltypes[col_idx] == 'plain':
             height = tf.cast(features[coln[:coln.find(":")] + ".height"],
-                             tf.int64)
+                             tf.int32)
             width = tf.cast(features[coln[:coln.find(":")] + ".width"],
-                            tf.int64)
-            image = tf.decode_raw(features[coln], tf.uint8)
-            image_shape = tf.pack([height, width, 3])
+                            tf.int32)
+            dtype_string = coln.split(":")[2]
+            image = tf.decode_raw(features[coln], tf.as_dtype(dtype_string))
+            image_shape = tf.stack([height, width, -1])
             result.append(tf.reshape(image, image_shape))
         elif coltypes[col_idx] == 'png':
             result.append(tf.image.decode_png(features[coln]))
