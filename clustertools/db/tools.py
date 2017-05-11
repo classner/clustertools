@@ -61,7 +61,7 @@ def encode_tf(tspec_entry):
                 result[spec[0] + '.width'] = _int64_feature(colval.shape[1])
         elif spec[1] == SPECTYPES.imlossless:
             assert colval.ndim == 3 and colval.shape[2] == 3, (
-                "Only 3-channel images are supported.")
+                "Only 3-channel images are supported (%s)." % (spec[0]))
             output = _strio.StringIO()
             pilim = _PIL.Image.fromarray(colval)
             pilim.save(output, format='PNG')

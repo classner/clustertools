@@ -68,6 +68,7 @@ def cli(in_fp, out_fp=None, num_threads=4):
         colfullnames.append(colfulln)
         coltypes.append(colt)
         colendings.append(fending)
+    assert len(colfullnames) > 0, "No columns found!"
     LOGGER.info("Scanning...")
     nsamples = 0
     scan_complete = False
@@ -115,7 +116,11 @@ colfullnames = None
 fillwidth = None
 
 
+WARNED_CHANNELS = False
+
+
 def file_loader(sample_idx):
+    global WARNED_CHANNELS
     results = []
     for coln, cole in zip(colfullnames, colendings):
         val = None
@@ -130,6 +135,17 @@ def file_loader(sample_idx):
             val = np.load(fp)
         elif cole in ['png', 'jpg', 'jpeg', 'webp']:
             val = sm.imread(fp)
+            if val.ndim < 3 or val.shape[2] == 4:
+                if val.ndim < 3:
+                    val = np.dstack([val[:, :, None]] * 3)
+                else:
+                    val = val[:, :, :3]
+                if not WARNED_CHANNELS:
+                    LOGGER.warn("There are 1 or 4 channel images that are "
+                                "automatically converted to 3 channels!")
+                    WARNED_CHANNELS = True
+            assert val.ndim == 3 and val.shape[2] == 3, ("Image shape: %s" %(
+                str(val.shape)))
         results.append(val)
     return [results]
 

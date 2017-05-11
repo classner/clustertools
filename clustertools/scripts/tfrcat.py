@@ -43,7 +43,8 @@ def cli(db_fp, out_fp=None):
                 if colt == 'text':
                     with open(path.join(out_fp,
                                         '{0:0{width}}_{1}.txt'.format(
-                                            run_idx, coln, width=fillwidth)),
+                                            run_idx, coln, width=fillwidth)
+                                        .encode("ascii")),
                               'w') as outf:
                         outf.write(val)
                 elif colt == 'plain':
