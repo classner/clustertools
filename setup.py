@@ -19,6 +19,8 @@ setup(
         'seaborn',
         'aenum',  # python 3: enum34
         'click',
+        'scikit-image',
+        'pillow'
     ],
     entry_points='''
     [console_scripts]
