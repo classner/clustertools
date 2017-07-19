@@ -28,6 +28,7 @@ setup(
     encaged=clustertools.scripts.encaged:cli
     tfrcat=clustertools.scripts.tfrcat:cli
     tfrpack=clustertools.scripts.tfrpack:cli
+    visualize_pose=clustertools.scripts.visualize_pose:cli
     ''',
     version=VERSION,
     license='MIT License',

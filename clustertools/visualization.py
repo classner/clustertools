@@ -176,7 +176,7 @@ def visualize_pose(image,  # pylint: disable=dangerous-default-value, too-many-a
                                 mode='reflect').astype(np.uint8)
     pose = (pose * scale).astype(np.int32)[:2, :]
     for connection in connections:
-        if len(connection) > 3:
+        if len(connection) > 4:
             if connection[4] == 2:
                 ccol = list(colorsys.rgb_to_hsv(*list(
                     np.array(connection[2]) / 255.)))
@@ -203,19 +203,19 @@ def visualize_pose(image,  # pylint: disable=dangerous-default-value, too-many-a
                          opacity)
     # Draw circles.
     for joint_idx in range(pose.shape[1]):
-        if connections is not None and skip_unconnected_joints:
+        if connections is not None and skip_unconnected_joints and len(connections[0]) > 4:
             # Skip joints that are unconnected.
             lmfound = False
             for connection in connections:
                 if joint_idx in connection[:2]:
                     lmfound = True
                     this_line_thickness = int(np.ceil(np.sqrt(connection[4]) *
-                                                      line_thickness * 0.6))
+                                                      line_thickness * 0.9))
                     break
             if not lmfound:
                 continue
         else:
-            this_line_thickness = int(np.ceil(line_thickness * 0.6))
+            this_line_thickness = int(np.ceil(line_thickness * 0.9))
         if multi_col_mode:
             ccol = circle_color[joint_idx]
         elif lm_region_mapping is not None:
