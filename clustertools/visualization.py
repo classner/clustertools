@@ -142,7 +142,7 @@ def draw_circle(image,  # pylint: disable=invalid-name
     else:
         assert len(color) == image.shape[2]
     assert radius > 0
-    rr, cc = skdraw.circle(pt[1], pt[0], radius)  # pylint: disable=invalid-name
+    rr, cc = skdraw.circle(pt[1], pt[0], radius, shape=image.shape[:2])  # pylint: disable=invalid-name
     image[rr, cc] = color
 
 
